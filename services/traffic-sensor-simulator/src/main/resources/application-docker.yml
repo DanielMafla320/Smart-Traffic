@@ -1,0 +1,7 @@
+# Perfil para ejecutar el microservicio dentro de la red Docker de infrastructure.
+# Activar con: -e SPRING_PROFILES_ACTIVE=docker (o --spring.profiles.active=docker).
+# Solo aplica dentro de smarttraffic-network; en el host se usan localhost:9092.
+# Las variables de entorno siguen teniendo prioridad sobre estos valores.
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:29092}

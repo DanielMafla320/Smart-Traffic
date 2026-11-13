@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: traffic-density-processor
+  jmx:
+    enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:traffic-density-processor}
+      auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
+      enable-auto-commit: false
+    listener:
+      concurrency: ${KAFKA_CONSUMER_CONCURRENCY:3}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:smarttraffic}
+    password: ${RABBITMQ_PASSWORD:smarttraffic_dev}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    connection-timeout: 5s
+
+management:
+  endpoints:
+    jmx:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+smarttraffic:
+  kafka:
+    topic: ${KAFKA_TOPIC:raw_traffic_data}
+    retry-interval-ms: ${KAFKA_RETRY_INTERVAL_MS:1000}
+    retry-max-attempts: ${KAFKA_RETRY_MAX_ATTEMPTS:2}
+  density:
+    strategy: ${DENSITY_STRATEGY:weighted-average}
+    window-size: ${DENSITY_WINDOW_SIZE:10}
+    moderada-threshold: ${TRAFFIC_MODERADA_THRESHOLD:30.0}
+    congestionada-threshold: ${TRAFFIC_CONGESTIONADA_THRESHOLD:60.0}
+  rabbit:
+    exchange: ${RABBITMQ_EXCHANGE:traffic_updates}
+    publish-interval-ms: ${TRAFFIC_PUBLISH_INTERVAL_MS:5000}
+
+logging:
+  level:
+    com.smarttraffic: INFO
