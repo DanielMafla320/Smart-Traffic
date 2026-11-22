@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: alert-dispatcher
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASS:guest}
+    listener:
+      simple:
+        concurrency: 1
+        max-concurrency: 1
+        acknowledge-mode: auto
+        prefetch: 10
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000
+        default-requeue-rejected: false
+
+traffic:
+  rabbitmq:
+    updates-exchange: traffic_updates
+    query-queue: query_traffic_queue
+    answers-exchange: query_answers
+    dead-letter-exchange: query_traffic_dlx
+    dead-letter-queue: query_traffic_dead
