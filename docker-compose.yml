@@ -1,0 +1,266 @@
+# =============================================================================
+# SmartTraffic - Sistema completo
+# -----------------------------------------------------------------------------
+# Uso:
+#   cp .env.example .env          (PowerShell: Copy-Item .env.example .env)
+#   docker compose --env-file .env up -d --build
+#   Abrir http://localhost  (o http://localhost:${HTTP_PORT})
+#
+# Servicios de Juan (alert-dispatcher, query-client), cuando estén en el repo:
+#   docker compose --profile juan up -d --build
+#
+# Redes:
+#   backend-net  (interna, sin salida a Internet): brokers, base de datos y
+#                microservicios. Ningún servicio de esta red publica puertos.
+#   frontend-net: Nginx y el backend del dashboard.
+# Solo Nginx publica un puerto en el host. Para depurar Kafka/RabbitMQ/Postgres
+# desde el host se usa infrastructure/docker-compose.yml (entorno de desarrollo).
+# =============================================================================
+
+name: smarttraffic
+
+# --- Bloques reutilizables (anclas YAML) -------------------------------------
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"   # rotación: como máximo 3 archivos de 10 MB por contenedor
+    max-file: "3"
+
+x-java-service: &java-service
+  restart: unless-stopped
+  logging: *default-logging
+  mem_limit: 512m
+  networks:
+    - backend-net
+
+x-java-env: &java-env
+  SPRING_PROFILES_ACTIVE: docker
+  # La JVM usa como máximo el 75 % de la memoria del contenedor.
+  JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
+
+services:
+  # ===========================================================================
+  # Infraestructura
+  # ===========================================================================
+  kafka:
+    image: apache/kafka:3.9.2
+    hostname: kafka
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 1g
+    environment:
+      CLUSTER_ID: "4L6g3nShT-eMCtK--X86sw"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9094
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Heap acotado para que quepa en mem_limit.
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms512m"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    networks:
+      - backend-net
+
+  rabbitmq:
+    image: rabbitmq:4.1.8-management
+    hostname: rabbitmq
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 512m
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?Definir RABBITMQ_USERNAME en .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Definir RABBITMQ_PASSWORD en .env}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+    networks:
+      - backend-net
+
+  postgres:
+    image: postgres:16
+    hostname: postgres
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 384m
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-smarttraffic}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:?Definir POSTGRES_ADMIN_USER en .env}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Definir POSTGRES_ADMIN_PASSWORD en .env}
+      ARCHIVER_DB_USER: ${ARCHIVER_DB_USER:-archiver_user}
+      ARCHIVER_DB_PASSWORD: ${ARCHIVER_DB_PASSWORD:?Definir ARCHIVER_DB_PASSWORD en .env}
+      DASHBOARD_DB_USER: ${DASHBOARD_DB_USER:-dashboard_reader}
+      DASHBOARD_DB_PASSWORD: ${DASHBOARD_DB_PASSWORD:?Definir DASHBOARD_DB_PASSWORD en .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Se ejecuta solo la primera vez (volumen vacío).
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - backend-net
+
+  # ===========================================================================
+  # Integrante 1 (Daniel): Kafka y procesamiento
+  # ===========================================================================
+  traffic-sensor-simulator:
+    <<: *java-service
+    build: ./services/traffic-sensor-simulator
+    image: smarttraffic/traffic-sensor-simulator:1.0.0
+    environment:
+      <<: *java-env
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  traffic-density-processor:
+    <<: *java-service
+    build: ./services/traffic-density-processor
+    image: smarttraffic/traffic-density-processor:1.0.0
+    environment:
+      <<: *java-env
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # ===========================================================================
+  # Integrante 3 (Andrés): historial, dashboard y frontend
+  # ===========================================================================
+  traffic-archiver:
+    <<: *java-service
+    build: ./services/traffic-archiver
+    image: smarttraffic/traffic-archiver:1.0.0
+    environment:
+      <<: *java-env
+      ARCHIVER_DB_USER: ${ARCHIVER_DB_USER:-archiver_user}
+      ARCHIVER_DB_PASSWORD: ${ARCHIVER_DB_PASSWORD}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  user-dashboard-backend:
+    <<: *java-service
+    build: ./services/user-dashboard-backend
+    image: smarttraffic/user-dashboard-backend:1.0.0
+    environment:
+      <<: *java-env
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      DASHBOARD_DB_USER: ${DASHBOARD_DB_USER:-dashboard_reader}
+      DASHBOARD_DB_PASSWORD: ${DASHBOARD_DB_PASSWORD}
+      DASHBOARD_ALLOWED_ORIGINS: ${DASHBOARD_ALLOWED_ORIGINS:-http://localhost}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # liveness: la app está viva (no depende de que la base responda).
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health/liveness | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - backend-net
+      - frontend-net
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 64m
+    ports:
+      # ÚNICO puerto publicado de todo el sistema.
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/snippets:/etc/nginx/snippets:ro
+      - ./frontend:/usr/share/nginx/html:ro
+    depends_on:
+      user-dashboard-backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/nginx-health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks:
+      - frontend-net
+
+  # ===========================================================================
+  # Integrante 2 (Juan): alertas y consultas (perfil opcional "juan")
+  # Se activan con --profile juan cuando su código esté en services/.
+  # Sus servicios leen RABBITMQ_USER / RABBITMQ_PASS.
+  # ===========================================================================
+  alert-dispatcher:
+    <<: *java-service
+    profiles: ["juan"]
+    build: ./services/alert-dispatcher
+    image: smarttraffic/alert-dispatcher:1.0.0
+    environment:
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USERNAME}
+      RABBITMQ_PASS: ${RABBITMQ_PASSWORD}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  query-client:
+    <<: *java-service
+    profiles: ["juan"]
+    build: ./services/query-client
+    image: smarttraffic/query-client:1.0.0
+    environment:
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USERNAME}
+      RABBITMQ_PASS: ${RABBITMQ_PASSWORD}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      alert-dispatcher:
+        condition: service_started
+
+volumes:
+  kafka_data:
+  rabbitmq_data:
+  postgres_data:
+
+networks:
+  backend-net:
+    # Red interna: sus contenedores no tienen salida a Internet ni puertos publicados.
+    internal: true
+  frontend-net:
