@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartTraffic · Dashboard</title>
+    <style>
+        /* ================================================================
+           Variables de diseño (tema claro y oscuro)
+           ================================================================ */
+        :root {
+            --bg: #f3f5f8;
+            --surface: #ffffff;
+            --surface-alt: #f8fafc;
+            --text: #172033;
+            --text-muted: #5b6577;
+            --border: #dfe4ec;
+            --accent: #2457d6;
+            --ok: #1f9d55;
+            --ok-soft: #e3f6ec;
+            --warn: #c98a00;
+            --warn-soft: #fff4d6;
+            --danger: #d43c3c;
+            --danger-soft: #fde6e6;
+            --neutral-soft: #eef1f5;
+            --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 4px 12px rgba(16, 24, 40, .06);
+            --radius: 14px;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0f141c;
+                --surface: #171e29;
+                --surface-alt: #1c2532;
+                --text: #e6ebf2;
+                --text-muted: #9aa5b5;
+                --border: #2a3444;
+                --accent: #6d95ff;
+                --ok: #3ccf7e;
+                --ok-soft: #133224;
+                --warn: #f0b429;
+                --warn-soft: #3a2f10;
+                --danger: #ff6b6b;
+                --danger-soft: #3d1b1e;
+                --neutral-soft: #222c3a;
+                --shadow: 0 1px 2px rgba(0, 0, 0, .3);
+            }
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.45;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+
+        /* ---------------- Encabezado ---------------- */
+        header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            position: sticky; top: 0; z-index: 10;
+        }
+        .header-inner {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; padding: 14px 16px; flex-wrap: wrap;
+        }
+        .brand { display: flex; align-items: center; gap: 10px; }
+        .brand-logo {
+            width: 34px; height: 34px; border-radius: 9px;
+            background: var(--accent); display: grid; place-items: center;
+        }
+        .brand-logo span { width: 8px; height: 8px; border-radius: 50%; background: #fff; box-shadow: 0 -11px 0 #fff8, 0 11px 0 #fff8; }
+        .brand h1 { font-size: 1.15rem; margin: 0; }
+        .brand p { margin: 0; font-size: .8rem; color: var(--text-muted); }
+
+        .connection {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 6px 12px; border-radius: 999px; font-size: .85rem;
+            background: var(--neutral-soft); color: var(--text-muted);
+        }
+        .connection .dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+        .connection.connected { background: var(--ok-soft); color: var(--ok); }
+        .connection.connecting { background: var(--warn-soft); color: var(--warn); }
+        .connection.disconnected { background: var(--danger-soft); color: var(--danger); }
+        .connection.connected .dot { animation: pulse 2s infinite; }
+        @keyframes pulse { 50% { opacity: .35; } }
+
+        main { padding: 20px 0 40px; }
+        section { margin-bottom: 28px; }
+        h2 { font-size: 1.05rem; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+        .muted { color: var(--text-muted); }
+        .small { font-size: .82rem; }
+
+        /* ---------------- Avisos ---------------- */
+        .notice {
+            padding: 12px 16px; border-radius: 10px; margin-bottom: 16px;
+            background: var(--warn-soft); color: var(--text); border: 1px solid var(--border);
+            display: none;
+        }
+        .notice.visible { display: block; }
+        .notice.error { background: var(--danger-soft); }
+
+        /* ---------------- Resumen ---------------- */
+        .summary-grid {
+            display: grid; gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        }
+        .stat {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow);
+        }
+        .stat .label { font-size: .8rem; color: var(--text-muted); }
+        .stat .value { font-size: 1.7rem; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+        .stat .hint { font-size: .78rem; color: var(--text-muted); margin-top: 2px; min-height: 1.1em; }
+        .stat.danger .value { color: var(--danger); }
+        .status-counts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+        /* ---------------- Tarjetas de zona ---------------- */
+        .zones-grid {
+            display: grid; gap: 14px;
+            grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+        }
+        .zone-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-top: 5px solid var(--border);
+            border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);
+            transition: border-color .4s, transform .2s;
+        }
+        .zone-card.flash { transform: scale(1.015); }
+        .zone-card.DESPEJADA { border-top-color: var(--ok); }
+        .zone-card.MODERADA { border-top-color: var(--warn); }
+        .zone-card.CONGESTIONADA { border-top-color: var(--danger); }
+        .zone-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .zone-name { font-weight: 700; font-size: 1.05rem; }
+        .zone-avg { font-size: 2.1rem; font-weight: 700; margin: 10px 0 0; font-variant-numeric: tabular-nums; }
+        .zone-avg small { font-size: .85rem; font-weight: 500; color: var(--text-muted); }
+        .bar { height: 8px; background: var(--neutral-soft); border-radius: 999px; overflow: hidden; margin: 10px 0; }
+        .bar > div { height: 100%; width: 0; border-radius: 999px; transition: width .6s ease, background .4s; }
+        .DESPEJADA .bar > div { background: var(--ok); }
+        .MODERADA .bar > div { background: var(--warn); }
+        .CONGESTIONADA .bar > div { background: var(--danger); }
+        .zone-updated { font-size: .78rem; color: var(--text-muted); }
+
+        .badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: .72rem; font-weight: 700; letter-spacing: .03em;
+            padding: 4px 9px; border-radius: 999px; white-space: nowrap;
+            background: var(--neutral-soft); color: var(--text-muted);
+        }
+        .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+        .badge.DESPEJADA { background: var(--ok-soft); color: var(--ok); }
+        .badge.MODERADA { background: var(--warn-soft); color: var(--warn); }
+        .badge.CONGESTIONADA { background: var(--danger-soft); color: var(--danger); }
+
+        .empty {
+            grid-column: 1 / -1; text-align: center; padding: 36px 16px;
+            background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius);
+            color: var(--text-muted);
+        }
+        .spinner {
+            width: 26px; height: 26px; margin: 0 auto 10px; border-radius: 50%;
+            border: 3px solid var(--border); border-top-color: var(--accent);
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ---------------- Historial ---------------- */
+        .panel {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);
+        }
+        .filters { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; }
+        label { display: block; font-size: .8rem; color: var(--text-muted); margin-bottom: 4px; }
+        select, input, button {
+            font: inherit; width: 100%; padding: 9px 10px; border-radius: 9px;
+            border: 1px solid var(--border); background: var(--surface-alt); color: var(--text);
+        }
+        button {
+            background: var(--accent); color: #fff; border: none; font-weight: 600; cursor: pointer;
+        }
+        button:disabled { opacity: .6; cursor: progress; }
+        button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .history-summary { display: flex; gap: 16px; flex-wrap: wrap; margin: 14px 0 8px; font-size: .88rem; }
+        .history-summary strong { font-variant-numeric: tabular-nums; }
+        .table-wrap { overflow-x: auto; max-height: 420px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+        th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        th { position: sticky; top: 0; background: var(--surface-alt); font-weight: 600; z-index: 1; }
+        td.num { text-align: right; font-variant-numeric: tabular-nums; }
+        td.mono { font-family: ui-monospace, Consolas, monospace; font-size: .8rem; color: var(--text-muted); }
+        tbody tr:hover { background: var(--surface-alt); }
+
+        footer { text-align: center; font-size: .78rem; color: var(--text-muted); padding: 10px 0 24px; }
+
+        @media (max-width: 520px) {
+            .zone-avg { font-size: 1.8rem; }
+            .stat .value { font-size: 1.45rem; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="container header-inner">
+        <div class="brand">
+            <div class="brand-logo" aria-hidden="true"><span></span></div>
+            <div>
+                <h1>SmartTraffic</h1>
+                <p>Monitoreo de tráfico en tiempo real · Pasto</p>
+            </div>
+        </div>
+        <div id="connection" class="connection disconnected" role="status" aria-live="polite">
+            <span class="dot"></span><span id="connection-text">Desconectado</span>
+        </div>
+    </div>
+</header>
+
+<main class="container">
+    <div id="notice" class="notice" role="alert"></div>
+
+    <!-- ================= Resumen general ================= -->
+    <section aria-labelledby="summary-title">
+        <h2 id="summary-title">Resumen general</h2>
+        <div class="summary-grid">
+            <div class="stat">
+                <div class="label">Total de vehículos</div>
+                <div class="value" id="stat-total">—</div>
+                <div class="hint">Suma de los promedios por zona</div>
+            </div>
+            <div class="stat danger">
+                <div class="label">Zonas congestionadas</div>
+                <div class="value" id="stat-congested">—</div>
+                <div class="hint" id="stat-congested-list"></div>
+            </div>
+            <div class="stat">
+                <div class="label">Zonas monitoreadas</div>
+                <div class="value" id="stat-zones">—</div>
+                <div class="status-counts" id="stat-by-status"></div>
+            </div>
+            <div class="stat">
+                <div class="label">Última actualización</div>
+                <div class="value" id="stat-updated" style="font-size:1.25rem">—</div>
+                <div class="hint" id="stat-updated-ago"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= Zonas ================= -->
+    <section aria-labelledby="zones-title">
+        <h2 id="zones-title">Estado por zona</h2>
+        <div class="zones-grid" id="zones">
+            <div class="empty"><div class="spinner"></div>Cargando estado de las zonas…</div>
+        </div>
+    </section>
+
+    <!-- ================= Historial ================= -->
+    <section aria-labelledby="history-title">
+        <h2 id="history-title">Historial de lecturas</h2>
+        <div class="panel">
+            <form id="history-form" class="filters" novalidate>
+                <div>
+                    <label for="history-zone">Zona</label>
+                    <select id="history-zone" required>
+                        <option value="">Esperando zonas…</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="history-from">Desde</label>
+                    <input type="datetime-local" id="history-from" step="1">
+                </div>
+                <div>
+                    <label for="history-to">Hasta</label>
+                    <input type="datetime-local" id="history-to" step="1">
+                </div>
+                <div>
+                    <button type="submit" id="history-submit">Consultar historial</button>
+                </div>
+            </form>
+
+            <div id="history-summary" class="history-summary muted">
+                Elija una zona y un rango de fechas (máximo 7 días). Se muestran hasta 500 lecturas, de la más reciente a la más antigua.
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Fecha y hora de la lectura</th>
+                        <th style="text-align:right">Vehículos</th>
+                        <th>Guardada en la base</th>
+                        <th>event_id</th>
+                    </tr>
+                    </thead>
+                    <tbody id="history-body">
+                    <tr><td colspan="4" class="muted">Sin consulta todavía.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</main>
+
+<footer>
+    SmartTraffic · Datos vía REST (carga inicial) y WebSocket (tiempo real) · <span id="api-base"></span>
+</footer>
+
+<script>
+    "use strict";
+
+    /* ====================================================================
+       Configuración
+       --------------------------------------------------------------------
+       - Con Nginx (Docker), la página y la API comparten origen: se usa
+         la misma URL de la página.
+       - En desarrollo (página servida en otro puerto, p. ej. 5500), la API
+         está en http://localhost:8081.
+       - Se puede forzar con ?api=http://host:puerto
+       ==================================================================== */
+    const DEV_API = "http://localhost:8081";
+    const API_BASE = (() => {
+        const fromQuery = new URLSearchParams(location.search).get("api");
+        if (fromQuery) return fromQuery.replace(/\/+$/, "");
+        if (location.protocol === "file:" || location.port === "5500") return DEV_API;
+        return location.origin;
+    })();
+    const WS_URL = API_BASE.replace(/^http/, "ws") + "/ws/traffic";
+
+    const STATUS_LABELS = { DESPEJADA: "Despejada", MODERADA: "Moderada", CONGESTIONADA: "Congestionada" };
+    const BAR_SCALE_MAX = 120;      // Escala visual de la barra (máximo del simulador)
+    const STALE_AFTER_MS = 15000;   // Sin datos nuevos en 15 s = datos desactualizados
+    const RECONNECT_MAX_MS = 30000; // Espera máxima entre reintentos de WebSocket
+
+    const state = { zones: [], stats: null, lastMessageAt: 0, socket: null, reconnectDelay: 1000 };
+
+    /* ====================================================================
+       Utilidades
+       ==================================================================== */
+    const $ = (id) => document.getElementById(id);
+
+    /** Crea un elemento con texto. Se usa textContent (nunca innerHTML con
+        datos del servidor) para evitar inyección de HTML (XSS). */
+    function el(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined && text !== null) node.textContent = text;
+        return node;
+    }
+
+    const numberFormat = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 });
+    const timeFormat = new Intl.DateTimeFormat("es-CO", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const dateTimeFormat = new Intl.DateTimeFormat("es-CO", {
+        year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit"
+    });
+
+    function formatAgo(isoDate) {
+        if (!isoDate) return "";
+        const seconds = Math.max(0, Math.round((Date.now() - new Date(isoDate).getTime()) / 1000));
+        if (seconds < 60) return `hace ${seconds} s`;
+        const minutes = Math.round(seconds / 60);
+        return minutes < 60 ? `hace ${minutes} min` : `hace ${Math.round(minutes / 60)} h`;
+    }
+
+    function showNotice(message, isError = false) {
+        const notice = $("notice");
+        notice.textContent = message;
+        notice.className = "notice visible" + (isError ? " error" : "");
+    }
+
+    function hideNotice() {
+        $("notice").className = "notice";
+    }
+
+    /** fetch con manejo de errores: devuelve JSON o lanza Error con el
+        mensaje que envía el backend (ErrorResponse.message). */
+    async function getJson(path) {
+        let response;
+        try {
+            response = await fetch(API_BASE + path, { headers: { Accept: "application/json" } });
+        } catch (networkError) {
+            throw new Error("No se pudo contactar al servidor (" + API_BASE + ").");
+        }
+        const body = await response.json().catch(() => null);
+        if (!response.ok) {
+            throw new Error((body && body.message) || `Error HTTP ${response.status}`);
+        }
+        return body;
+    }
+
+    /* ====================================================================
+       Renderizado del estado actual
+       ==================================================================== */
+    function render() {
+        renderSummary(state.stats);
+        renderZones(state.zones, state.stats);
+        updateZoneSelect(state.zones);
+    }
+
+    function renderSummary(stats) {
+        if (!stats) return;
+        $("stat-total").textContent = stats.waiting_for_data ? "—" : numberFormat.format(stats.total_vehicles);
+        $("stat-congested").textContent = stats.waiting_for_data ? "—" : stats.congested_zones_count;
+        $("stat-congested-list").textContent = stats.congested_zones.length
+            ? stats.congested_zones.join(", ")
+            : (stats.waiting_for_data ? "" : "Ninguna");
+        $("stat-zones").textContent = stats.zones_count;
+        $("stat-updated").textContent = stats.last_updated ? timeFormat.format(new Date(stats.last_updated)) : "—";
+        $("stat-updated-ago").textContent = stats.last_updated ? formatAgo(stats.last_updated) : "Sin datos aún";
+
+        const counts = $("stat-by-status");
+        counts.replaceChildren();
+        Object.entries(stats.zones_by_status || {}).forEach(([status, count]) => {
+            counts.append(el("span", "badge " + status, `${count} ${STATUS_LABELS[status] || status}`));
+        });
+    }
+
+    function renderZones(zones, stats) {
+        const container = $("zones");
+
+        if (!zones.length) {
+            const empty = el("div", "empty");
+            empty.append(el("div", "spinner"));
+            empty.append(el("div", null, stats && stats.last_updated
+                ? "Esperando datos: el procesador todavía no ha calculado ninguna zona."
+                : "Esperando datos del servidor…"));
+            container.replaceChildren(empty);
+            return;
+        }
+
+        // Se reutilizan las tarjetas existentes (por zone_id) para que las
+        // barras se animen en lugar de redibujar todo.
+        const existing = new Map([...container.querySelectorAll(".zone-card")].map(card => [card.dataset.zone, card]));
+        const cards = zones.map(zone => {
+            const card = existing.get(zone.zone_id) || createZoneCard(zone.zone_id);
+            updateZoneCard(card, zone);
+            return card;
+        });
+        container.replaceChildren(...cards);
+    }
+
+    function createZoneCard(zoneId) {
+        const card = el("article", "zone-card");
+        card.dataset.zone = zoneId;
+
+        const head = el("div", "zone-head");
+        head.append(el("div", "zone-name", zoneId), el("span", "badge"));
+
+        const avg = el("div", "zone-avg");
+        avg.append(el("span", "avg-value"), el("small", null, " veh. promedio"));
+
+        const bar = el("div", "bar");
+        bar.append(el("div"));
+
+        card.append(head, avg, bar, el("div", "zone-updated"));
+        card.setAttribute("aria-live", "polite");
+        return card;
+    }
+
+    function updateZoneCard(card, zone) {
+        const previousStatus = card.dataset.status;
+        card.className = "zone-card " + zone.traffic_status;
+        card.dataset.status = zone.traffic_status;
+
+        const badge = card.querySelector(".badge");
+        badge.className = "badge " + zone.traffic_status;
+        badge.textContent = STATUS_LABELS[zone.traffic_status] || zone.traffic_status;
+
+        card.querySelector(".avg-value").textContent = numberFormat.format(zone.average_vehicles);
+        const percent = Math.min(100, (zone.average_vehicles / BAR_SCALE_MAX) * 100);
+        card.querySelector(".bar > div").style.width = percent.toFixed(1) + "%";
+        card.querySelector(".zone-updated").textContent =
+            "Actualizado " + timeFormat.format(new Date(zone.last_updated));
+
+        // Pequeña animación cuando la zona cambia de estado.
+        if (previousStatus && previousStatus !== zone.traffic_status) {
+            card.classList.add("flash");
+            setTimeout(() => card.classList.remove("flash"), 400);
+        }
+    }
+
+    /** Llena el selector de zonas del historial con las zonas recibidas
+        (no hay zonas escritas a mano). Conserva la selección actual. */
+    function updateZoneSelect(zones) {
+        const select = $("history-zone");
+        const ids = zones.map(z => z.zone_id);
+        const current = [...select.options].map(o => o.value).filter(Boolean);
+        if (!ids.length || ids.join("|") === current.join("|")) return;
+
+        const selected = select.value || ids[0];
+        select.replaceChildren(...ids.map(id => {
+            const option = el("option", null, id);
+            option.value = id;
+            return option;
+        }));
+        select.value = ids.includes(selected) ? selected : ids[0];
+    }
+
+    /** Aplica un mensaje del WebSocket o de la carga REST inicial. */
+    function applyUpdate(zones, stats) {
+        state.zones = zones;
+        state.stats = stats;
+        state.lastMessageAt = Date.now();
+        render();
+    }
+
+    /* ====================================================================
+       1) Carga inicial por REST
+       ==================================================================== */
+    async function loadInitialState() {
+        try {
+            const [zones, stats] = await Promise.all([getJson("/api/zones"), getJson("/api/stats")]);
+            applyUpdate(zones, stats);
+        } catch (error) {
+            showNotice("No se pudo cargar el estado inicial: " + error.message, true);
+        }
+    }
+
+    /* ====================================================================
+       2) Actualizaciones en tiempo real por WebSocket (con reconexión)
+       ==================================================================== */
+    function setConnection(status, text) {
+        $("connection").className = "connection " + status;
+        $("connection-text").textContent = text;
+    }
+
+    function connectWebSocket() {
+        setConnection("connecting", "Conectando…");
+        const socket = new WebSocket(WS_URL);
+        state.socket = socket;
+
+        socket.addEventListener("open", () => {
+            state.reconnectDelay = 1000;
+            setConnection("connected", "En vivo");
+            hideNotice();
+        });
+
+        socket.addEventListener("message", (event) => {
+            let message;
+            try {
+                message = JSON.parse(event.data);
+            } catch (parseError) {
+                console.warn("Mensaje WebSocket inválido", parseError);
+                return;
+            }
+            if (message.type === "traffic_update") {
+                applyUpdate(message.zones || [], message.stats);
+            }
+        });
+
+        socket.addEventListener("close", () => {
+            const seconds = Math.round(state.reconnectDelay / 1000);
+            setConnection("disconnected", `Sin conexión · reintento en ${seconds} s`);
+            setTimeout(connectWebSocket, state.reconnectDelay);
+            // Backoff exponencial: 1 s, 2 s, 4 s ... hasta 30 s.
+            state.reconnectDelay = Math.min(state.reconnectDelay * 2, RECONNECT_MAX_MS);
+        });
+
+        socket.addEventListener("error", () => socket.close());
+    }
+
+    /** Cada segundo: refresca el "hace X s" y avisa si los datos se
+        quedaron viejos (por ejemplo, si el procesador se detuvo). */
+    function startClock() {
+        setInterval(() => {
+            if (state.stats && state.stats.last_updated) {
+                $("stat-updated-ago").textContent = formatAgo(state.stats.last_updated);
+                const age = Date.now() - new Date(state.stats.last_updated).getTime();
+                const stale = age > STALE_AFTER_MS;
+                if (stale && state.socket && state.socket.readyState === WebSocket.OPEN) {
+                    showNotice("Los datos no se actualizan desde " + formatAgo(state.stats.last_updated)
+                        + ". Puede que el procesador de tráfico esté detenido.");
+                } else if (!stale && $("notice").textContent.startsWith("Los datos no se actualizan")) {
+                    hideNotice();
+                }
+            }
+        }, 1000);
+    }
+
+    /* ====================================================================
+       3) Historial (REST → PostgreSQL)
+       ==================================================================== */
+
+    /** Convierte un Date a "YYYY-MM-DDTHH:mm:ss" en hora local, el formato
+        de <input type="datetime-local">. */
+    function toLocalInputValue(date) {
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+            + `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    }
+
+    function setDefaultHistoryRange() {
+        const now = new Date();
+        $("history-to").value = toLocalInputValue(now);
+        $("history-from").value = toLocalInputValue(new Date(now.getTime() - 60 * 60 * 1000));
+    }
+
+    async function searchHistory(event) {
+        event.preventDefault();
+        const zoneId = $("history-zone").value;
+        const fromValue = $("history-from").value;
+        const toValue = $("history-to").value;
+        const summary = $("history-summary");
+        const body = $("history-body");
+
+        if (!zoneId) {
+            summary.textContent = "Elija una zona.";
+            return;
+        }
+
+        // El input da hora local; se envía en UTC (ISO-8601), como espera la API.
+        const params = new URLSearchParams({ zoneId });
+        if (fromValue) params.set("from", new Date(fromValue).toISOString());
+        if (toValue) params.set("to", new Date(toValue).toISOString());
+
+        const button = $("history-submit");
+        button.disabled = true;
+        button.textContent = "Consultando…";
+        summary.textContent = "Consultando…";
+
+        try {
+            const readings = await getJson("/api/history?" + params.toString());
+            renderHistory(zoneId, readings);
+        } catch (error) {
+            summary.textContent = "Error: " + error.message;
+            body.replaceChildren(rowMessage("No se pudo obtener el historial."));
+        } finally {
+            button.disabled = false;
+            button.textContent = "Consultar historial";
+        }
+    }
+
+    function rowMessage(text) {
+        const row = el("tr");
+        const cell = el("td", "muted", text);
+        cell.colSpan = 4;
+        row.append(cell);
+        return row;
+    }
+
+    function renderHistory(zoneId, readings) {
+        const summary = $("history-summary");
+        const body = $("history-body");
+
+        if (!readings.length) {
+            summary.textContent = `No hay lecturas de ${zoneId} en ese rango.`;
+            body.replaceChildren(rowMessage("Sin resultados."));
+            return;
+        }
+
+        const counts = readings.map(r => r.vehicle_count);
+        const average = counts.reduce((a, b) => a + b, 0) / counts.length;
+        summary.replaceChildren(
+            el("span", null, `${zoneId}: `),
+            labelled("Lecturas", readings.length),
+            labelled("Promedio", numberFormat.format(average)),
+            labelled("Mínimo", Math.min(...counts)),
+            labelled("Máximo", Math.max(...counts))
+        );
+
+        body.replaceChildren(...readings.map(reading => {
+            const row = el("tr");
+            row.append(
+                el("td", null, dateTimeFormat.format(new Date(reading.reading_timestamp))),
+                el("td", "num", reading.vehicle_count),
+                el("td", null, dateTimeFormat.format(new Date(reading.created_at))),
+                el("td", "mono", reading.event_id)
+            );
+            return row;
+        }));
+    }
+
+    function labelled(label, value) {
+        const span = el("span", null, label + ": ");
+        span.append(el("strong", null, value));
+        return span;
+    }
+
+    /* ====================================================================
+       Inicio
+       ==================================================================== */
+    $("api-base").textContent = "API: " + API_BASE;
+    $("history-form").addEventListener("submit", searchHistory);
+    setDefaultHistoryRange();
+    loadInitialState().then(connectWebSocket);
+    startClock();
+</script>
+</body>
+</html>
