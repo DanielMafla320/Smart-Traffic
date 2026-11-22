@@ -1,0 +1,9 @@
+# Perfil para ejecutar el microservicio dentro de la red Docker.
+# Activar con: SPRING_PROFILES_ACTIVE=docker
+# Usa los nombres de servicio de Compose en lugar de localhost. Las variables
+# de entorno siguen teniendo prioridad sobre estos valores.
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:29092}
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:postgres}:${DB_PORT:5432}/${DB_NAME:smarttraffic}

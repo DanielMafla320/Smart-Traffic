@@ -1,0 +1,7 @@
+# Perfil para ejecutar el microservicio dentro de la red Docker.
+# Activar con: SPRING_PROFILES_ACTIVE=docker
+spring:
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:postgres}:${DB_PORT:5432}/${DB_NAME:smarttraffic}

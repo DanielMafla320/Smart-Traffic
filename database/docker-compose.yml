@@ -1,0 +1,48 @@
+# =============================================================================
+# SmartTraffic - PostgreSQL independiente para DESARROLLO (Integrante 3)
+# -----------------------------------------------------------------------------
+# Levanta solo la base de datos, sin depender de ningún otro servicio:
+#   docker compose -f database/docker-compose.yml up -d
+#
+# Los servicios ejecutados desde el IDE (mvn spring-boot:run) se conectan a
+# localhost:5433. Se usa 5433 en el host para no chocar con un PostgreSQL
+# local instalado en 5432. Solo accesible desde este equipo (127.0.0.1).
+#
+# Credenciales: valores de desarrollo; se pueden sobrescribir con variables
+# de entorno o con un archivo .env (no versionado).
+# El sistema completo usa el docker-compose.yml de la raíz.
+# =============================================================================
+
+name: smarttraffic-database
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: smarttraffic-postgres
+    hostname: postgres
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-smarttraffic}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-smarttraffic_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-smarttraffic_admin_dev}
+      # Leídas por init.sql para crear los usuarios de aplicación.
+      ARCHIVER_DB_USER: ${ARCHIVER_DB_USER:-archiver_user}
+      ARCHIVER_DB_PASSWORD: ${ARCHIVER_DB_PASSWORD:-archiver_dev}
+      DASHBOARD_DB_USER: ${DASHBOARD_DB_USER:-dashboard_reader}
+      DASHBOARD_DB_PASSWORD: ${DASHBOARD_DB_PASSWORD:-dashboard_dev}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Se ejecuta solo la primera vez (volumen vacío).
+      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+volumes:
+  postgres_data:
+    name: smarttraffic-postgres-data

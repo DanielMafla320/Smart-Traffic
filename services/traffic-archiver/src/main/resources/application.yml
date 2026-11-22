@@ -1,0 +1,69 @@
+# Configuración para ejecutar desde el host (IDE o mvn spring-boot:run).
+# Cada valor puede sobrescribirse con la variable de entorno indicada.
+spring:
+  application:
+    name: traffic-archiver
+  jmx:
+    enabled: true
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      # Grupo propio: lee TODO el topic sin interferir con el procesador de Daniel.
+      group-id: ${KAFKA_CONSUMER_GROUP:traffic-archiver}
+      auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
+      # El offset se confirma solo después de guardar (AckMode.RECORD).
+      enable-auto-commit: false
+    listener:
+      # Un hilo por partición (el topic tiene 3).
+      concurrency: ${KAFKA_CONSUMER_CONCURRENCY:3}
+    admin:
+      operation-timeout: 10s
+      close-timeout: 5s
+
+  datasource:
+    # 5433: puerto del Postgres de Docker en el host (ver infrastructure/.env.example).
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:smarttraffic}
+    username: ${ARCHIVER_DB_USER:archiver_user}
+    password: ${ARCHIVER_DB_PASSWORD:archiver_dev}
+    hikari:
+      pool-name: archiver-pool
+      maximum-pool-size: 5
+      # Si la base no responde en 5 s, se lanza una excepción y el
+      # manejador de errores de Kafka reintenta más tarde.
+      connection-timeout: 5000
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      # El esquema lo define database/init.sql. Hibernate solo verifica que
+      # la entidad coincide con la tabla; nunca crea ni modifica tablas.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+management:
+  endpoints:
+    jmx:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+smarttraffic:
+  kafka:
+    topic: ${KAFKA_TOPIC:raw_traffic_data}
+    partitions: ${KAFKA_TOPIC_PARTITIONS:3}
+    replicas: ${KAFKA_TOPIC_REPLICATION_FACTOR:1}
+    # Errores inesperados: pocos reintentos y luego se descarta con log.
+    retry-interval-ms: ${KAFKA_RETRY_INTERVAL_MS:1000}
+    retry-max-attempts: ${KAFKA_RETRY_MAX_ATTEMPTS:2}
+    # Base de datos caída: se reintenta sin límite para no perder lecturas.
+    database-retry-interval-ms: ${DB_RETRY_INTERVAL_MS:5000}
+
+logging:
+  level:
+    com.smarttraffic: INFO
