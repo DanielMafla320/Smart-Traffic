@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: traffic-sensor-simulator
+  jmx:
+    enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+        max.block.ms: 5000
+    admin:
+      operation-timeout: 10s
+      close-timeout: 5s
+
+management:
+  endpoints:
+    jmx:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+smarttraffic:
+  kafka:
+    topic: ${KAFKA_TOPIC:raw_traffic_data}
+    partitions: ${KAFKA_TOPIC_PARTITIONS:3}
+    replicas: ${KAFKA_TOPIC_REPLICATION_FACTOR:1}
+  simulator:
+    enabled: ${SIMULATOR_ENABLED:true}
+    interval-ms: ${SIMULATOR_INTERVAL_MS:2000}
+    zones: ${SIMULATOR_ZONES:Zona A,Zona B,Zona C,Zona D,Zona E}
+    vehicle-count-min: ${SIMULATOR_MIN_VEHICLES:0}
+    vehicle-count-max: ${SIMULATOR_MAX_VEHICLES:120}
+
+logging:
+  level:
+    com.smarttraffic: INFO
