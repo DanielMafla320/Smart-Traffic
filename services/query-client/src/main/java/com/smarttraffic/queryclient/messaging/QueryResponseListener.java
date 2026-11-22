@@ -14,10 +14,14 @@ public class QueryResponseListener {
 
     @RabbitListener(queues = "#{clientAnswersQueue.name}")
     public void receive(RouteQueryResponse response, Message message) {
-        log.info("Query response received: queryId={}, correlationId={}, result={}, zones={}",
-                response.queryId(),
-                message.getMessageProperties().getCorrelationId(),
-                response.result(),
-                response.zones());
+        log.info("{}", format(response));
+    }
+
+    String format(RouteQueryResponse response) {
+        String status = response.routeStatus() == null
+                ? response.result().name()
+                : response.routeStatus().name();
+        return "[%s] Trayecto [%s] → %s".formatted(
+                response.userId(), String.join(", ", response.trayecto()), status);
     }
 }

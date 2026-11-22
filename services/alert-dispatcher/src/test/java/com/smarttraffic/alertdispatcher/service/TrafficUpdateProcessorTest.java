@@ -3,9 +3,7 @@ package com.smarttraffic.alertdispatcher.service;
 import com.smarttraffic.alertdispatcher.alert.TrafficAlertSubject;
 import com.smarttraffic.alertdispatcher.domain.CongestionStatus;
 import com.smarttraffic.alertdispatcher.domain.QueryResultStatus;
-import com.smarttraffic.alertdispatcher.domain.QueryType;
-import com.smarttraffic.alertdispatcher.domain.TrafficZone;
-import com.smarttraffic.alertdispatcher.dto.RouteQueryRequest;
+import com.smarttraffic.alertdispatcher.dto.QueryRequestRecord;
 import com.smarttraffic.alertdispatcher.dto.TrafficUpdateEvent;
 import com.smarttraffic.alertdispatcher.dto.TrafficUpdateZone;
 import com.smarttraffic.alertdispatcher.state.StatusChange;
@@ -49,11 +47,11 @@ class TrafficUpdateProcessorTest {
         var staleResult = processor.process(event(1, CongestionStatus.MODERADA));
 
         verify(alertSubject).publish(new StatusChange(
-                TrafficZone.A, CongestionStatus.DESPEJADA,
+                "Zona A", CongestionStatus.DESPEJADA,
                 CongestionStatus.CONGESTIONADA, Instant.ofEpochSecond(2)));
         verifyNoMoreInteractions(alertSubject);
         assertFalse(staleResult.accepted());
-        assertEquals(CongestionStatus.CONGESTIONADA, stateStore.statusOf(TrafficZone.A));
+        assertEquals(CongestionStatus.CONGESTIONADA, stateStore.statusOf("Zona A"));
     }
 
     @Test
@@ -76,10 +74,9 @@ class TrafficUpdateProcessorTest {
         var result = processor.process(event);
 
         assertTrue(result.accepted());
-        assertEquals(CongestionStatus.MODERADA, stateStore.statusOf(TrafficZone.A));
+        assertEquals(CongestionStatus.MODERADA, stateStore.statusOf("Zona A"));
         var response = new TrafficQueryService(stateStore).resolve(
-                new RouteQueryRequest("query-1", "client-1", QueryType.ZONE,
-                        TrafficZone.A, null, null, Instant.now()));
+                new QueryRequestRecord("client-1", List.of("Zona A")), "query-1");
         assertEquals(QueryResultStatus.OK, response.result());
     }
 

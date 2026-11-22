@@ -2,19 +2,24 @@ package com.smarttraffic.alertdispatcher.dto;
 
 import com.smarttraffic.alertdispatcher.domain.CongestionStatus;
 import com.smarttraffic.alertdispatcher.domain.QueryResultStatus;
-import com.smarttraffic.alertdispatcher.domain.QueryType;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.Instant;
 import java.util.List;
 
 public record RouteQueryResponse(
         String queryId,
-        String clientId,
-        QueryType queryType,
+        @JsonProperty("user_id") String userId,
+        List<String> trayecto,
         QueryResultStatus result,
         List<ZoneStatus> zones,
         CongestionStatus routeStatus,
         Instant snapshotTimestamp,
         Instant respondedAt,
         String message) {
+
+    public RouteQueryResponse {
+        trayecto = List.copyOf(trayecto);
+        zones = List.copyOf(zones);
+    }
 }

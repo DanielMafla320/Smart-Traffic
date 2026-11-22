@@ -222,7 +222,7 @@ services:
   # ===========================================================================
   # Integrante 2 (Juan): alertas y consultas (perfil opcional "juan")
   # Se activan con --profile juan cuando su código esté en services/.
-  # Sus servicios leen RABBITMQ_USER / RABBITMQ_PASS.
+  # Sus servicios leen RABBITMQ_USERNAME / RABBITMQ_PASSWORD.
   # ===========================================================================
   alert-dispatcher:
     <<: *java-service
@@ -232,8 +232,8 @@ services:
     environment:
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
       RABBITMQ_HOST: rabbitmq
-      RABBITMQ_USER: ${RABBITMQ_USERNAME}
-      RABBITMQ_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -246,8 +246,9 @@ services:
     environment:
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
       RABBITMQ_HOST: rabbitmq
-      RABBITMQ_USER: ${RABBITMQ_USERNAME}
-      RABBITMQ_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      USER_ID: ${USER_ID:-client_456}
     depends_on:
       rabbitmq:
         condition: service_healthy

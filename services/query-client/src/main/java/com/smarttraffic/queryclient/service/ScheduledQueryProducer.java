@@ -1,33 +1,30 @@
 package com.smarttraffic.queryclient.service;
 
-import com.smarttraffic.queryclient.domain.QueryType;
-import com.smarttraffic.queryclient.domain.TrafficZone;
-import com.smarttraffic.queryclient.dto.RouteQueryRequest;
+import com.smarttraffic.queryclient.dto.QueryRequestRecord;
 import com.smarttraffic.queryclient.messaging.TrafficQueryPublisher;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
-import java.util.UUID;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Component
 public class ScheduledQueryProducer {
 
     private final TrafficQueryPublisher publisher;
-    private final String clientId;
-    private final TrafficZone zone;
-    private final TrafficZone destinationZone;
+    private final String userId;
+    private final String zone;
+    private final String destinationZone;
     private final AtomicLong queryCount = new AtomicLong();
 
     public ScheduledQueryProducer(
             TrafficQueryPublisher publisher,
-            @Value("${traffic.client.id}") String clientId,
-            @Value("${traffic.client.zone}") TrafficZone zone,
-            @Value("${traffic.client.destination-zone}") TrafficZone destinationZone) {
+            @Value("${traffic.client.user-id}") String userId,
+            @Value("${traffic.client.zone}") String zone,
+            @Value("${traffic.client.destination-zone}") String destinationZone) {
         this.publisher = publisher;
-        this.clientId = clientId;
+        this.userId = userId;
         this.zone = zone;
         this.destinationZone = destinationZone;
     }
@@ -37,12 +34,9 @@ public class ScheduledQueryProducer {
             initialDelayString = "${traffic.client.query-interval-ms:15000}")
     public void sendNextQuery() {
         long currentCount = queryCount.getAndIncrement();
-        String queryId = UUID.randomUUID().toString();
-        RouteQueryRequest request = currentCount % 2 == 0
-                ? new RouteQueryRequest(queryId, clientId, QueryType.ZONE,
-                        zone, null, null, Instant.now())
-                : new RouteQueryRequest(queryId, clientId, QueryType.ROUTE,
-                        null, zone, destinationZone, Instant.now());
+        QueryRequestRecord request = currentCount % 2 == 0
+                ? new QueryRequestRecord(userId, List.of(zone))
+                : new QueryRequestRecord(userId, List.of(zone, destinationZone));
         publisher.publish(request);
     }
 }

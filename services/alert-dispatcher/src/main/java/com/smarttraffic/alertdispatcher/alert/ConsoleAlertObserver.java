@@ -12,7 +12,7 @@ public class ConsoleAlertObserver implements TrafficAlertObserver {
 
     @Override
     public void onStatusChange(StatusChange change) {
-        log.info("Traffic status changed: zone={}, {} -> {}, timestamp={}",
-                change.zone(), change.previousStatus(), change.currentStatus(), change.timestamp());
+        log.info("{} cambió de {} a {}",
+                change.zone(), change.previousStatus(), change.currentStatus());
     }
 }
