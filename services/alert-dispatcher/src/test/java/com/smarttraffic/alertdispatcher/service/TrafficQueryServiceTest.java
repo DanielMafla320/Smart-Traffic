@@ -2,9 +2,7 @@ package com.smarttraffic.alertdispatcher.service;
 
 import com.smarttraffic.alertdispatcher.domain.CongestionStatus;
 import com.smarttraffic.alertdispatcher.domain.QueryResultStatus;
-import com.smarttraffic.alertdispatcher.domain.QueryType;
-import com.smarttraffic.alertdispatcher.domain.TrafficZone;
-import com.smarttraffic.alertdispatcher.dto.RouteQueryRequest;
+import com.smarttraffic.alertdispatcher.dto.QueryRequestRecord;
 import com.smarttraffic.alertdispatcher.dto.TrafficUpdateEvent;
 import com.smarttraffic.alertdispatcher.dto.TrafficUpdateZone;
 import com.smarttraffic.alertdispatcher.state.TrafficStateStore;
@@ -18,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class TrafficQueryServiceTest {
 
     @Test
-    void resolvesRouteUsingTheWorstStatusOfItsEndpoints() {
+    void resolvesTrayectoUsingTheWorstStatusOfAllItsZones() {
         TrafficStateStore store = new TrafficStateStore();
         Instant snapshotTimestamp = Instant.parse("2026-11-22T12:00:00Z");
         store.applySnapshot(new TrafficUpdateEvent(
@@ -30,9 +28,8 @@ class TrafficQueryServiceTest {
                         zone("Zona D", CongestionStatus.DESPEJADA),
                         zone("Zona E", CongestionStatus.CONGESTIONADA))));
 
-        var response = new TrafficQueryService(store).resolve(new RouteQueryRequest(
-                "query-1", "client-1", QueryType.ROUTE, null,
-                TrafficZone.A, TrafficZone.E, Instant.now()));
+        var response = new TrafficQueryService(store).resolve(
+                new QueryRequestRecord("client_1", List.of("Zona A", "Zona E")), "query-1");
 
         assertEquals(QueryResultStatus.OK, response.result());
         assertEquals(CongestionStatus.CONGESTIONADA, response.routeStatus());
@@ -43,23 +40,22 @@ class TrafficQueryServiceTest {
     @Test
     void reportsWhenTheInitialSnapshotHasNotArrived() {
         var response = new TrafficQueryService(new TrafficStateStore()).resolve(
-                new RouteQueryRequest("query-2", "client-1", QueryType.ZONE,
-                        TrafficZone.A, null, null, Instant.now()));
+                new QueryRequestRecord("client_1", List.of("Zona A")), "query-2");
 
         assertEquals(QueryResultStatus.SNAPSHOT_NOT_READY, response.result());
     }
 
     @Test
-    void reportsWhenARequestedZoneHasNotArrivedInPartialSnapshot() {
+    void reportsUnknownZoneAfterReceivingSnapshot() {
         TrafficStateStore store = new TrafficStateStore();
         store.applySnapshot(new TrafficUpdateEvent(
                 Instant.now(), List.of(zone("Zona A", CongestionStatus.MODERADA))));
 
-        var response = new TrafficQueryService(store).resolve(new RouteQueryRequest(
-                "query-3", "client-1", QueryType.ZONE, TrafficZone.B,
-                null, null, Instant.now()));
+        var response = new TrafficQueryService(store).resolve(
+                new QueryRequestRecord("client_1", List.of("Zona Z")), "query-3");
 
-        assertEquals(QueryResultStatus.SNAPSHOT_NOT_READY, response.result());
+        assertEquals(QueryResultStatus.ZONE_NOT_FOUND, response.result());
+        org.junit.jupiter.api.Assertions.assertTrue(response.message().contains("Zona Z"));
     }
 
     private TrafficUpdateZone zone(String zoneId, CongestionStatus status) {

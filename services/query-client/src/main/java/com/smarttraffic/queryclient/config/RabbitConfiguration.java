@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
 @Configuration
 public class RabbitConfiguration {
 
-    private static final Pattern CLIENT_ID_PATTERN = Pattern.compile("[A-Za-z0-9_-]{1,64}");
+    private static final Pattern USER_ID_PATTERN = Pattern.compile("[A-Za-z0-9_-]{1,64}");
 
     @Bean
     TopicExchange queryAnswersExchange(
@@ -37,12 +37,12 @@ public class RabbitConfiguration {
     Binding clientAnswersBinding(
             @Qualifier("clientAnswersQueue") Queue queue,
             @Qualifier("queryAnswersExchange") TopicExchange exchange,
-            @Value("${traffic.client.id}") String clientId) {
-        if (!CLIENT_ID_PATTERN.matcher(clientId).matches()) {
+            @Value("${traffic.client.user-id}") String userId) {
+        if (!USER_ID_PATTERN.matcher(userId).matches()) {
             throw new IllegalArgumentException(
-                    "CLIENT_ID must contain only letters, numbers, underscores, and hyphens");
+                    "USER_ID must contain only letters, numbers, underscores, and hyphens");
         }
-        return BindingBuilder.bind(queue).to(exchange).with("answers." + clientId);
+        return BindingBuilder.bind(queue).to(exchange).with("answer." + userId);
     }
 
     @Bean

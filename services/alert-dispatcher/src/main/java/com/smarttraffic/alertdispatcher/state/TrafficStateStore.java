@@ -1,7 +1,6 @@
 package com.smarttraffic.alertdispatcher.state;
 
 import com.smarttraffic.alertdispatcher.domain.CongestionStatus;
-import com.smarttraffic.alertdispatcher.domain.TrafficZone;
 import com.smarttraffic.alertdispatcher.dto.TrafficUpdateEvent;
 import com.smarttraffic.alertdispatcher.dto.TrafficUpdateZone;
 import com.smarttraffic.alertdispatcher.dto.ZoneStatus;
@@ -9,18 +8,15 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.EnumMap;
-import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class TrafficStateStore {
 
-    private final ConcurrentHashMap<TrafficZone, CongestionStatus> states =
-            new ConcurrentHashMap<>();
+    private final Map<String, CongestionStatus> states = new LinkedHashMap<>();
     private Instant latestTimestamp;
     private boolean initialized;
 
@@ -33,12 +29,12 @@ public class TrafficStateStore {
             return unchangedResult();
         }
 
-        Map<TrafficZone, CongestionStatus> incoming = new EnumMap<>(TrafficZone.class);
+        Map<String, CongestionStatus> incoming = new LinkedHashMap<>();
         for (TrafficUpdateZone zone : event.zones()) {
-            TrafficZone trafficZone = parseZone(zone);
-            CongestionStatus status = parseStatus(zone);
-            if (trafficZone != null && status != null) {
-                incoming.putIfAbsent(trafficZone, status);
+            String zoneName = zoneName(zone);
+            CongestionStatus status = status(zone);
+            if (zoneName != null && status != null) {
+                incoming.putIfAbsent(zoneName, status);
             }
         }
         if (incoming.isEmpty()) {
@@ -69,7 +65,7 @@ public class TrafficStateStore {
         return latestTimestamp;
     }
 
-    public synchronized CongestionStatus statusOf(TrafficZone zone) {
+    public synchronized CongestionStatus statusOf(String zone) {
         return states.get(zone);
     }
 
@@ -77,9 +73,8 @@ public class TrafficStateStore {
         if (!initialized) {
             return List.of();
         }
-        return EnumSet.allOf(TrafficZone.class).stream()
-                .filter(states::containsKey)
-                .map(zone -> new ZoneStatus(zone, states.get(zone)))
+        return states.entrySet().stream()
+                .map(entry -> new ZoneStatus(entry.getKey(), entry.getValue()))
                 .toList();
     }
 
@@ -91,22 +86,14 @@ public class TrafficStateStore {
         return new SnapshotUpdateResult(false, initialized, latestTimestamp, List.of());
     }
 
-    private TrafficZone parseZone(TrafficUpdateZone zone) {
-        if (zone == null || zone.zoneId() == null) {
+    private String zoneName(TrafficUpdateZone zone) {
+        if (zone == null || zone.zoneId() == null || zone.zoneId().isBlank()) {
             return null;
         }
-        String zoneId = zone.zoneId().trim();
-        if (zoneId.regionMatches(true, 0, "Zona ", 0, 5)) {
-            zoneId = zoneId.substring(5).trim();
-        }
-        try {
-            return TrafficZone.valueOf(zoneId.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException exception) {
-            return null;
-        }
+        return zone.zoneId().trim();
     }
 
-    private CongestionStatus parseStatus(TrafficUpdateZone zone) {
+    private CongestionStatus status(TrafficUpdateZone zone) {
         if (zone == null || zone.trafficStatus() == null) {
             return null;
         }

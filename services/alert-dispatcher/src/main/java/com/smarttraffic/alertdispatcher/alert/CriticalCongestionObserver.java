@@ -13,9 +13,9 @@ public class CriticalCongestionObserver implements TrafficAlertObserver {
 
     @Override
     public void onStatusChange(StatusChange change) {
-        if (change.currentStatus() == CongestionStatus.CONGESTIONADA) {
-            log.warn("CRITICAL congestion alert: zone={}, timestamp={}",
-                    change.zone(), change.timestamp());
+        if (change.currentStatus() == CongestionStatus.CONGESTIONADA
+                && change.previousStatus() != CongestionStatus.CONGESTIONADA) {
+            log.warn("¡La {} ahora está congestionada!", change.zone());
         }
     }
 }
