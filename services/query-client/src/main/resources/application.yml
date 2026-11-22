@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: query-client
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASS:guest}
+    listener:
+      simple:
+        acknowledge-mode: auto
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000
+        default-requeue-rejected: false
+
+traffic:
+  rabbitmq:
+    request-queue: query_traffic_queue
+    answers-exchange: query_answers
+  client:
+    id: ${CLIENT_ID:client-1}
+    zone: ${CLIENT_ZONE:A}
+    destination-zone: ${CLIENT_DESTINATION_ZONE:E}
+    query-interval-ms: ${QUERY_INTERVAL_MS:15000}
