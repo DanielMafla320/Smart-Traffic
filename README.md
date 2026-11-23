@@ -147,6 +147,7 @@ sobrescribir con variables de entorno:
 | `KAFKA_RETRY_MAX_ATTEMPTS` | `2` | Procesador |
 | `DENSITY_STRATEGY` | `weighted-average` | Procesador |
 | `DENSITY_WINDOW_SIZE` | `10` | Procesador |
+| `DENSITY_WINDOW_DURATION` | `60s` | Procesador |
 | `TRAFFIC_MODERADA_THRESHOLD` | `30.0` | Procesador |
 | `TRAFFIC_CONGESTIONADA_THRESHOLD` | `60.0` | Procesador |
 | `RABBITMQ_HOST` | `localhost` | Procesador |
@@ -323,9 +324,16 @@ Para pasar opciones de JVM se puede usar `JAVA_TOOL_OPTIONS`, por ejemplo
   peso. Es una interpretación acordada provisionalmente.
 - El rango de vehículos `0..120` es una decisión de simulación, configurable con
   `SIMULATOR_MIN_VEHICLES` y `SIMULATOR_MAX_VEHICLES`.
-- La ventana de 10 lecturas por zona es configurable con `DENSITY_WINDOW_SIZE`.
+- La ventana por zona tiene dos límites: como máximo 10 lecturas
+  (`DENSITY_WINDOW_SIZE`) y solo lecturas con antigüedad de hasta 60 segundos
+  respecto a la más reciente de la zona (`DENSITY_WINDOW_DURATION`, `0s`
+  la desactiva). Una lectura atrasada que cae fuera de la ventana se ignora.
+- El conteo negativo se rechaza en el constructor de `SensorReadingRecord`
+  (`IllegalArgumentException`): no se puede crear una lectura así.
 - El estado de las zonas vive en memoria y se pierde al reiniciar el procesador.
-  El histórico persistente corresponde al archivador de otro integrante.
+  El histórico persistente lo guarda `traffic-archiver`: las lecturas en
+  `traffic_readings_history` (desde Kafka) y los cambios de estado de
+  congestión en `traffic_status_history` (desde el exchange `traffic_updates`).
 - Las credenciales de RabbitMQ incluidas son exclusivamente para desarrollo
   local; no deben usarse en un entorno compartido o productivo.
 

@@ -9,6 +9,7 @@ import com.smarttraffic.density.domain.TrafficStatus;
 import com.smarttraffic.density.domain.ZoneSnapshot;
 import com.smarttraffic.density.strategy.SimpleAverageStrategy;
 import com.smarttraffic.density.strategy.WeightedAverageStrategy;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
@@ -119,7 +120,7 @@ class ZoneStateStoreTest {
     @Test
     void aplicaLaEstrategiaPonderadaConfigurada() {
         DensityProperties properties = new DensityProperties(
-                Strategy.WEIGHTED_AVERAGE, 10, 30.0, 60.0);
+                Strategy.WEIGHTED_AVERAGE, 10, DensityProperties.DEFAULT_WINDOW_DURATION, 30.0, 60.0);
         ZoneStateStore store = new ZoneStateStore(new WeightedAverageStrategy(), properties);
 
         store.record("Zona A", 10, BASE_TIME);
@@ -197,13 +198,83 @@ class ZoneStateStoreTest {
         });
     }
 
+    @Test
+    void descartaLecturasMasAntiguasQueLaVentanaTemporal() {
+        ZoneStateStore store = newStore(10, Duration.ofSeconds(30), 30.0, 60.0);
+
+        store.record("Zona A", 100, BASE_TIME);
+        store.record("Zona A", 90, BASE_TIME.plusSeconds(10));
+        store.record("Zona A", 10, BASE_TIME.plusSeconds(35));
+        store.record("Zona A", 20, BASE_TIME.plusSeconds(40));
+
+        ZoneSnapshot snapshot = store.findSnapshot("Zona A").orElseThrow();
+        assertThat(snapshot.recentReadings()).containsExactly(90, 10, 20);
+        assertThat(snapshot.averageVehicles()).isEqualTo(40.0);
+        assertThat(snapshot.lastUpdated()).isEqualTo(BASE_TIME.plusSeconds(40));
+    }
+
+    @Test
+    void elLimiteDeLaVentanaTemporalEsInclusivo() {
+        ZoneStateStore store = newStore(10, Duration.ofSeconds(30), 30.0, 60.0);
+
+        store.record("Zona A", 10, BASE_TIME);
+        store.record("Zona A", 20, BASE_TIME.plusSeconds(30));
+
+        assertThat(store.findSnapshot("Zona A").orElseThrow().recentReadings())
+                .containsExactly(10, 20);
+    }
+
+    @Test
+    void unaPausaLargaDejaSoloLaLecturaNueva() {
+        ZoneStateStore store = newStore(10, Duration.ofSeconds(30), 30.0, 60.0);
+
+        store.record("Zona A", 80, BASE_TIME);
+        store.record("Zona A", 80, BASE_TIME.plusSeconds(1));
+        assertThat(currentStatus(store)).isEqualTo(TrafficStatus.CONGESTIONADA);
+
+        store.record("Zona A", 5, BASE_TIME.plusSeconds(120));
+
+        ZoneSnapshot snapshot = store.findSnapshot("Zona A").orElseThrow();
+        assertThat(snapshot.recentReadings()).containsExactly(5);
+        assertThat(snapshot.trafficStatus()).isEqualTo(TrafficStatus.DESPEJADA);
+    }
+
+    @Test
+    void ignoraUnaLecturaAtrasadaFueraDeLaVentana() {
+        ZoneStateStore store = newStore(10, Duration.ofSeconds(30), 30.0, 60.0);
+
+        store.record("Zona A", 40, BASE_TIME.plusSeconds(100));
+        store.record("Zona A", 120, BASE_TIME);
+
+        ZoneSnapshot snapshot = store.findSnapshot("Zona A").orElseThrow();
+        assertThat(snapshot.recentReadings()).containsExactly(40);
+        assertThat(snapshot.lastUpdated()).isEqualTo(BASE_TIME.plusSeconds(100));
+    }
+
+    @Test
+    void conDuracionCeroSoloAplicaElLimitePorCantidad() {
+        ZoneStateStore store = newStore(3, Duration.ZERO, 30.0, 60.0);
+
+        store.record("Zona A", 10, BASE_TIME);
+        store.record("Zona A", 20, BASE_TIME.plus(Duration.ofHours(1)));
+        store.record("Zona A", 30, BASE_TIME.plus(Duration.ofHours(2)));
+
+        assertThat(store.findSnapshot("Zona A").orElseThrow().recentReadings())
+                .containsExactly(10, 20, 30);
+    }
+
     private TrafficStatus currentStatus(ZoneStateStore store) {
         return store.findSnapshot("Zona A").orElseThrow().trafficStatus();
     }
 
     private ZoneStateStore newStore(int windowSize, double moderada, double congestionada) {
+        return newStore(windowSize, DensityProperties.DEFAULT_WINDOW_DURATION, moderada, congestionada);
+    }
+
+    private ZoneStateStore newStore(
+            int windowSize, Duration windowDuration, double moderada, double congestionada) {
         DensityProperties properties = new DensityProperties(
-                Strategy.SIMPLE_AVERAGE, windowSize, moderada, congestionada);
+                Strategy.SIMPLE_AVERAGE, windowSize, windowDuration, moderada, congestionada);
         return new ZoneStateStore(new SimpleAverageStrategy(), properties);
     }
 }

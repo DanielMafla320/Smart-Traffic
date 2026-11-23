@@ -13,6 +13,9 @@ import java.util.UUID;
  *
  * <p>Los nombres JSON son explícitos para no depender de la estrategia de nombres
  * configurada en Jackson y mantener estable el contrato entre microservicios.
+ *
+ * <p>Un conteo de vehículos negativo se rechaza en el propio constructor: no es
+ * posible crear una lectura con ese dato, ni desde código ni al deserializar JSON.
  */
 @JsonPropertyOrder({"event_id", "zone_id", "vehicle_count", "timestamp"})
 public record SensorReadingRecord(
@@ -22,6 +25,10 @@ public record SensorReadingRecord(
         @JsonProperty("timestamp") @NotNull Instant timestamp) {
 
     public SensorReadingRecord {
+        if (vehicleCount != null && vehicleCount < 0) {
+            throw new IllegalArgumentException(
+                    "La cantidad de vehículos no puede ser negativa: " + vehicleCount);
+        }
         if (zoneId != null) {
             zoneId = zoneId.trim();
         }

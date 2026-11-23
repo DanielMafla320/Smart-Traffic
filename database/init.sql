@@ -62,7 +62,46 @@ COMMENT ON COLUMN traffic_readings_history.created_at IS
     'Instante en que la lectura se guardó en la base de datos';
 
 -- -----------------------------------------------------------------------------
--- 2. Usuarios de aplicación (principio de mínimo privilegio)
+-- 2. Tabla de historial de estados de congestión por zona
+-- -----------------------------------------------------------------------------
+-- La llena traffic-archiver a partir del exchange RabbitMQ traffic_updates.
+-- Solo se guarda una fila cuando cambia el estado de una zona (o la primera vez
+-- que se observa), no cada snapshot de 5 s.
+CREATE TABLE traffic_status_history (
+    id                BIGSERIAL        PRIMARY KEY,
+    zone_id           VARCHAR(50)      NOT NULL,
+    previous_status   VARCHAR(20),
+    traffic_status    VARCHAR(20)      NOT NULL,
+    average_vehicles  DOUBLE PRECISION NOT NULL,
+    status_timestamp  TIMESTAMPTZ      NOT NULL,
+    created_at        TIMESTAMPTZ      NOT NULL DEFAULT now(),
+
+    CONSTRAINT ck_traffic_status_value
+        CHECK (traffic_status IN ('DESPEJADA', 'MODERADA', 'CONGESTIONADA')),
+    CONSTRAINT ck_traffic_status_previous_value
+        CHECK (previous_status IS NULL
+               OR previous_status IN ('DESPEJADA', 'MODERADA', 'CONGESTIONADA')),
+    CONSTRAINT ck_traffic_status_average CHECK (average_vehicles >= 0),
+    CONSTRAINT ck_traffic_status_zone_not_blank CHECK (btrim(zone_id) <> '')
+);
+
+-- Historial de estados por zona y rango de fechas, y último estado de una zona.
+CREATE INDEX idx_traffic_status_zone_timestamp
+    ON traffic_status_history (zone_id, status_timestamp);
+
+COMMENT ON TABLE traffic_status_history IS
+    'Historial de cambios de estado de congestión por zona (exchange traffic_updates)';
+COMMENT ON COLUMN traffic_status_history.previous_status IS
+    'Estado anterior de la zona; NULL si es la primera vez que se registra';
+COMMENT ON COLUMN traffic_status_history.traffic_status IS
+    'Estado nuevo: DESPEJADA, MODERADA o CONGESTIONADA';
+COMMENT ON COLUMN traffic_status_history.average_vehicles IS
+    'Promedio de vehículos de la ventana en el momento del cambio';
+COMMENT ON COLUMN traffic_status_history.status_timestamp IS
+    'Instante del snapshot publicado por el procesador (UTC)';
+
+-- -----------------------------------------------------------------------------
+-- 3. Usuarios de aplicación (principio de mínimo privilegio)
 -- -----------------------------------------------------------------------------
 -- archiver: solo puede leer e insertar (no actualizar ni borrar).
 CREATE ROLE :"archiver_user" LOGIN PASSWORD :'archiver_password';
@@ -82,3 +121,8 @@ GRANT SELECT, INSERT ON traffic_readings_history TO :"archiver_user";
 GRANT USAGE ON SEQUENCE traffic_readings_history_id_seq TO :"archiver_user";
 
 GRANT SELECT ON traffic_readings_history TO :"dashboard_user";
+
+GRANT SELECT, INSERT ON traffic_status_history TO :"archiver_user";
+GRANT USAGE ON SEQUENCE traffic_status_history_id_seq TO :"archiver_user";
+
+GRANT SELECT ON traffic_status_history TO :"dashboard_user";

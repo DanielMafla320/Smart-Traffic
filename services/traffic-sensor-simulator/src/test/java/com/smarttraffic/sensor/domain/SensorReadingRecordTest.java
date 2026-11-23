@@ -1,6 +1,7 @@
 package com.smarttraffic.sensor.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,11 +32,29 @@ class SensorReadingRecordTest {
     }
 
     @Test
-    void rechazaCantidadDeVehiculosNegativaOVacia() {
-        assertThat(validator.validate(validReading(-1)))
-                .extracting(ConstraintViolation::getPropertyPath)
-                .anySatisfy(path -> assertThat(path.toString()).isEqualTo("vehicleCount"));
+    void elConstructorRechazaCantidadDeVehiculosNegativa() {
+        assertThatThrownBy(() -> validReading(-1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("negativa");
+    }
 
+    @Test
+    void aceptaCeroVehiculos() {
+        assertThat(validator.validate(validReading(0))).isEmpty();
+    }
+
+    @Test
+    void laDeserializacionRechazaCantidadNegativa() {
+        String json = """
+                {"event_id":"6f1b8e4e-6f6a-4b52-9d3a-5c1f5d7d9f10","zone_id":"Zona A",\
+                "vehicle_count":-3,"timestamp":"2026-11-12T16:00:00Z"}""";
+
+        assertThatThrownBy(() -> objectMapper.readValue(json, SensorReadingRecord.class))
+                .hasRootCauseInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void rechazaCantidadDeVehiculosVacia() {
         SensorReadingRecord withoutCount = new SensorReadingRecord(
                 UUID.randomUUID(), "Zona A", null, Instant.parse("2026-11-12T16:00:00Z"));
         assertThat(validator.validate(withoutCount)).isNotEmpty();

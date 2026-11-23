@@ -36,6 +36,8 @@ smarttraffic:
   density:
     strategy: ${DENSITY_STRATEGY:weighted-average}
     window-size: ${DENSITY_WINDOW_SIZE:10}
+    # Antigüedad máxima de una lectura dentro de la ventana (0s = desactivada).
+    window-duration: ${DENSITY_WINDOW_DURATION:60s}
     moderada-threshold: ${TRAFFIC_MODERADA_THRESHOLD:30.0}
     congestionada-threshold: ${TRAFFIC_CONGESTIONADA_THRESHOLD:60.0}
   rabbit:
