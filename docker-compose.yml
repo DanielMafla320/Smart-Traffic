@@ -6,9 +6,6 @@
 #   docker compose --env-file .env up -d --build
 #   Abrir http://localhost  (o http://localhost:${HTTP_PORT})
 #
-# Servicios de Juan (alert-dispatcher, query-client), cuando estén en el repo:
-#   docker compose --profile juan up -d --build
-#
 # Redes:
 #   backend-net  (interna, sin salida a Internet): brokers, base de datos y
 #                microservicios. Ningún servicio de esta red publica puertos.
@@ -29,7 +26,12 @@ x-logging: &default-logging
 x-java-service: &java-service
   restart: unless-stopped
   logging: *default-logging
-  mem_limit: 512m
+  # Límites de hardware: la JVM se ajusta a ellos con MaxRAMPercentage.
+  deploy:
+    resources:
+      limits:
+        cpus: "0.50"
+        memory: 512M
   networks:
     - backend-net
 
@@ -47,7 +49,11 @@ services:
     hostname: kafka
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 1g
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
     environment:
       CLUSTER_ID: "4L6g3nShT-eMCtK--X86sw"
       KAFKA_NODE_ID: 1
@@ -65,7 +71,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      # Heap acotado para que quepa en mem_limit.
+      # Heap acotado para que quepa en el límite de memoria.
       KAFKA_HEAP_OPTS: "-Xmx512m -Xms512m"
     volumes:
       - kafka_data:/var/lib/kafka/data
@@ -83,7 +89,11 @@ services:
     hostname: rabbitmq
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 512m
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?Definir RABBITMQ_USERNAME en .env}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Definir RABBITMQ_PASSWORD en .env}
@@ -103,7 +113,11 @@ services:
     hostname: postgres
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 384m
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 384M
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-smarttraffic}
       POSTGRES_USER: ${POSTGRES_ADMIN_USER:?Definir POSTGRES_ADMIN_USER en .env}
@@ -200,7 +214,11 @@ services:
     image: nginx:1.27-alpine
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 64m
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
     ports:
       # ÚNICO puerto publicado de todo el sistema.
       - "${HTTP_PORT:-80}:80"
@@ -220,13 +238,11 @@ services:
       - frontend-net
 
   # ===========================================================================
-  # Integrante 2 (Juan): alertas y consultas (perfil opcional "juan")
-  # Se activan con --profile juan cuando su código esté en services/.
+  # Integrante 2 (Juan): alertas y consultas
   # Sus servicios leen RABBITMQ_USERNAME / RABBITMQ_PASSWORD.
   # ===========================================================================
   alert-dispatcher:
     <<: *java-service
-    profiles: ["juan"]
     build: ./services/alert-dispatcher
     image: smarttraffic/alert-dispatcher:1.0.0
     environment:
@@ -240,7 +256,6 @@ services:
 
   query-client:
     <<: *java-service
-    profiles: ["juan"]
     build: ./services/query-client
     image: smarttraffic/query-client:1.0.0
     environment:
