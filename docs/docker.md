@@ -33,21 +33,23 @@ Abrir <http://localhost>. La primera construcción tarda varios minutos
 | Detener y **borrar datos** | `docker compose down -v` |
 | Reconstruir un servicio | `docker compose up -d --build user-dashboard-backend` |
 | Consumo de recursos | `docker stats` |
-| Incluir servicios de Juan | `docker compose --profile juan up -d --build` |
 
 ### Servicios
 
-| Servicio | Imagen | Depende de (healthy) | Healthcheck | Memoria |
-|---|---|---|---|---|
-| `kafka` | `apache/kafka:3.9.2` (KRaft) | — | `kafka-broker-api-versions.sh` | 1 GB |
-| `rabbitmq` | `rabbitmq:4.1.8-management` | — | `rabbitmq-diagnostics ping` | 512 MB |
-| `postgres` | `postgres:16` | — | `pg_isready` | 384 MB |
-| `traffic-sensor-simulator` | build local | kafka | — | 512 MB |
-| `traffic-density-processor` | build local | kafka, rabbitmq | — | 512 MB |
-| `traffic-archiver` | build local | kafka, postgres | — | 512 MB |
-| `user-dashboard-backend` | build local | rabbitmq, postgres | `/actuator/health/liveness` | 512 MB |
-| `nginx` | `nginx:1.27-alpine` | user-dashboard-backend | `/nginx-health` | 64 MB |
+| Servicio | Imagen | Depende de (healthy) | Healthcheck | CPU | Memoria |
+|---|---|---|---|---|---|
+| `kafka` | `apache/kafka:3.9.2` (KRaft) | — | `kafka-broker-api-versions.sh` | 1.00 | 1 GB |
+| `rabbitmq` | `rabbitmq:4.1.8-management` | — | `rabbitmq-diagnostics ping` | 0.50 | 512 MB |
+| `postgres` | `postgres:16` | — | `pg_isready` | 0.50 | 384 MB |
+| `traffic-sensor-simulator` | build local | kafka | — | 0.50 | 512 MB |
+| `traffic-density-processor` | build local | kafka, rabbitmq | — | 0.50 | 512 MB |
+| `traffic-archiver` | build local | kafka, postgres | — | 0.50 | 512 MB |
+| `user-dashboard-backend` | build local | rabbitmq, postgres | `/actuator/health/liveness` | 0.50 | 512 MB |
+| `alert-dispatcher` | build local | rabbitmq | — | 0.50 | 512 MB |
+| `query-client` | build local | rabbitmq, alert-dispatcher (iniciado) | — | 0.50 | 512 MB |
+| `nginx` | `nginx:1.27-alpine` | user-dashboard-backend | `/nginx-health` | 0.25 | 64 MB |
 
+Los límites se definen con `deploy.resources.limits` (`cpus` y `memory`).
 Todos usan `restart: unless-stopped` y rotación de logs (`json-file`, 3 × 10 MB).
 Los servicios Java usan `SPRING_PROFILES_ACTIVE=docker` y
 `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=75`.
