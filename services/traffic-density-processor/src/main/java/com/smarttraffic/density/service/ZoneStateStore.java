@@ -7,6 +7,7 @@ import com.smarttraffic.density.domain.ZoneSnapshot;
 import com.smarttraffic.density.state.DespejadaState;
 import com.smarttraffic.density.state.ZoneState;
 import com.smarttraffic.density.strategy.DensityStrategy;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -26,7 +27,8 @@ import org.springframework.stereotype.Service;
  * <p>El mapa es seguro para concurrencia y cada actualización crea un nuevo
  * {@link ZoneData} inmutable, por lo que las lecturas de {@link #snapshots()} no
  * observan estados parcialmente modificados. La ventana de lecturas está acotada
- * por {@code smarttraffic.density.window-size}.
+ * por cantidad ({@code smarttraffic.density.window-size}) y por antigüedad
+ * ({@code smarttraffic.density.window-duration}).
  */
 @Service
 public class ZoneStateStore {
@@ -36,11 +38,13 @@ public class ZoneStateStore {
     private final ConcurrentMap<String, ZoneData> zoneStates = new ConcurrentHashMap<>();
     private final DensityStrategy densityStrategy;
     private final int windowSize;
+    private final Duration windowDuration;
     private final TrafficThresholds thresholds;
 
     public ZoneStateStore(DensityStrategy densityStrategy, DensityProperties properties) {
         this.densityStrategy = densityStrategy;
         this.windowSize = properties.windowSize();
+        this.windowDuration = properties.timeWindowEnabled() ? properties.windowDuration() : null;
         this.thresholds = properties.toThresholds();
     }
 
@@ -75,13 +79,33 @@ public class ZoneStateStore {
 
     private ZoneData updateZone(
             String zoneId, ZoneData current, int vehicleCount, Instant timestamp) {
-        List<Integer> window = new ArrayList<>(
-                current == null ? List.of() : current.recentReadings());
-        window.add(vehicleCount);
-        if (window.size() > windowSize) {
-            window = new ArrayList<>(window.subList(window.size() - windowSize, window.size()));
+        Instant newest = current == null || timestamp.isAfter(current.lastUpdated())
+                ? timestamp
+                : current.lastUpdated();
+
+        List<TimedReading> readings = new ArrayList<>(
+                current == null ? List.of() : current.readings());
+        readings.add(new TimedReading(vehicleCount, timestamp));
+
+        // Ventana temporal: se descartan las lecturas más antiguas que windowDuration
+        // respecto a la lectura más reciente de la zona.
+        if (windowDuration != null) {
+            Instant cutoff = newest.minus(windowDuration);
+            readings.removeIf(reading -> reading.timestamp().isBefore(cutoff));
+        }
+        // Ventana por cantidad: como máximo windowSize lecturas.
+        if (readings.size() > windowSize) {
+            readings = new ArrayList<>(
+                    readings.subList(readings.size() - windowSize, readings.size()));
+        }
+        if (readings.isEmpty()) {
+            // Lectura atrasada fuera de la ventana: no altera el estado actual.
+            log.debug("Lectura atrasada de la zona {} ({}) descartada por la ventana temporal",
+                    zoneId, timestamp);
+            return current;
         }
 
+        List<Integer> window = readings.stream().map(TimedReading::vehicleCount).toList();
         double average = densityStrategy.calculate(window);
         ZoneState previousState = current == null ? new DespejadaState() : current.state();
         ZoneState nextState = previousState.evaluate(average, thresholds);
@@ -94,7 +118,7 @@ public class ZoneStateStore {
                     zoneId, previousState.status(), nextState.status(), formatAverage(average));
         }
 
-        return new ZoneData(zoneId, window, average, nextState, timestamp);
+        return new ZoneData(zoneId, readings, average, nextState, newest);
     }
 
     private String formatAverage(double average) {
@@ -105,21 +129,24 @@ public class ZoneStateStore {
         TrafficStatus status = data.state().status();
         return new ZoneSnapshot(
                 data.zoneId(),
-                data.recentReadings(),
+                data.readings().stream().map(TimedReading::vehicleCount).toList(),
                 data.averageVehicles(),
                 status,
                 data.lastUpdated());
     }
 
+    private record TimedReading(int vehicleCount, Instant timestamp) {
+    }
+
     private record ZoneData(
             String zoneId,
-            List<Integer> recentReadings,
+            List<TimedReading> readings,
             double averageVehicles,
             ZoneState state,
             Instant lastUpdated) {
 
         private ZoneData {
-            recentReadings = List.copyOf(recentReadings);
+            readings = List.copyOf(readings);
         }
     }
 }

@@ -21,6 +21,27 @@ spring:
       operation-timeout: 10s
       close-timeout: 5s
 
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:smarttraffic}
+    password: ${RABBITMQ_PASSWORD:smarttraffic_dev}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    listener:
+      simple:
+        # Un solo hilo: los snapshots se procesan en orden.
+        concurrency: 1
+        max-concurrency: 1
+        prefetch: 10
+        # Base de datos caída: 3 intentos y luego se descarta el snapshot. No se
+        # pierde el cambio de estado: el siguiente snapshot lo vuelve a detectar.
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 2000
+          multiplier: 2.0
+        default-requeue-rejected: false
+
   datasource:
     # 5433: puerto del Postgres de Docker en el host (ver infrastructure/.env.example).
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:smarttraffic}
@@ -63,6 +84,11 @@ smarttraffic:
     retry-max-attempts: ${KAFKA_RETRY_MAX_ATTEMPTS:2}
     # Base de datos caída: se reintenta sin límite para no perder lecturas.
     database-retry-interval-ms: ${DB_RETRY_INTERVAL_MS:5000}
+  rabbit:
+    # Exchange fanout donde el procesador publica el estado de las zonas.
+    exchange: ${RABBITMQ_EXCHANGE:traffic_updates}
+    # Cola durable propia del archivador para el historial de estados.
+    status-history-queue: ${RABBITMQ_STATUS_HISTORY_QUEUE:traffic_status_history_queue}
 
 logging:
   level:

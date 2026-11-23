@@ -29,6 +29,11 @@
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
         </dependency>
+        <!-- Consumidor de RabbitMQ (historial de estados desde traffic_updates) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
         <!-- JPA (Hibernate) + pool de conexiones HikariCP -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

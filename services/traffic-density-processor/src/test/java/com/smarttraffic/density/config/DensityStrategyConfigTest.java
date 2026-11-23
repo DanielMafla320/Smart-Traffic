@@ -17,7 +17,7 @@ class DensityStrategyConfigTest {
     @Test
     void seleccionaElPromedioSimplePorConfiguracion() {
         runner.withBean(DensityProperties.class,
-                        () -> new DensityProperties(Strategy.SIMPLE_AVERAGE, 10, 30.0, 60.0))
+                        () -> new DensityProperties(Strategy.SIMPLE_AVERAGE, 10, DensityProperties.DEFAULT_WINDOW_DURATION, 30.0, 60.0))
                 .run(context -> assertThat(context.getBean(DensityStrategy.class))
                         .isInstanceOf(SimpleAverageStrategy.class));
     }
@@ -25,7 +25,7 @@ class DensityStrategyConfigTest {
     @Test
     void seleccionaElPromedioPonderadoPorConfiguracion() {
         runner.withBean(DensityProperties.class,
-                        () -> new DensityProperties(Strategy.WEIGHTED_AVERAGE, 10, 30.0, 60.0))
+                        () -> new DensityProperties(Strategy.WEIGHTED_AVERAGE, 10, DensityProperties.DEFAULT_WINDOW_DURATION, 30.0, 60.0))
                 .run(context -> assertThat(context.getBean(DensityStrategy.class))
                         .isInstanceOf(WeightedAverageStrategy.class));
     }

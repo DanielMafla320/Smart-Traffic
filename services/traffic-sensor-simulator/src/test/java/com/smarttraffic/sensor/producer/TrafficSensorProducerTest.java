@@ -52,7 +52,7 @@ class TrafficSensorProducerTest {
     @Test
     void descartaLecturasInvalidasSinPublicarlas() {
         producer.publish(new SensorReadingRecord(
-                UUID.randomUUID(), "Zona A", -5, Instant.now()));
+                UUID.randomUUID(), "  ", 5, Instant.now()));
 
         verifyNoInteractions(kafkaTemplate);
     }

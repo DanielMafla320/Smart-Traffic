@@ -25,7 +25,7 @@ class TrafficReadingProcessorTest {
     @BeforeEach
     void setUp() {
         DensityProperties properties = new DensityProperties(
-                Strategy.SIMPLE_AVERAGE, 10, 30.0, 60.0);
+                Strategy.SIMPLE_AVERAGE, 10, DensityProperties.DEFAULT_WINDOW_DURATION, 30.0, 60.0);
         store = new ZoneStateStore(new SimpleAverageStrategy(), properties);
         processor = new TrafficReadingProcessor(validator, store);
     }
